@@ -234,15 +234,15 @@
     const priceMap = {};
     
     for (const itemId of uniqueItemIds) {
-        // Updated to use the new v2 endpoint structure
-        const url = `https://api.torn.com/v2/market/item/${itemId}?key=${apiKey}`;
+        // Fix: Explicitly declare ?selections=itemmarket for the specific item id
+        const url = `https://api.torn.com/v2/market/${itemId}?selections=itemmarket&key=${apiKey}`;
         try {
             const data = await handleTornFetch(url);
             
-            // In API v2, market listings are located under data.listings
-            const listings = data.listings || [];
+            // In API v2, the target array inside itemmarket is called 'listings'
+            const listings = data.itemmarket?.listings || [];
             
-            // The lowest price is still the first element in the array
+            // Extract the cheapest item price from the first listing
             priceMap[itemId] = listings.length > 0 ? listings[0].price : 0; 
         } catch (error) {
             console.warn(`Failed mapping item ${itemId} using API v2, skipping.`);
