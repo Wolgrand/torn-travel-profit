@@ -3,7 +3,40 @@
  */
 const API = {
     /**
-     * Fetch events from Torn API
+     * Fetch item purchase logs from Torn API
+     * Gets logs from the 'items' category which includes all item-related transactions
+     * @param {string} apiKey - The user's Torn API key
+     * @returns {Promise<Object>} Log data from the API
+     */
+    async fetchPurchaseLogs(apiKey) {
+        if (!apiKey) {
+            throw new Error('API key is required');
+        }
+
+        try {
+            const url = `${CONFIG.TORN_API_BASE}${CONFIG.LOG_ENDPOINT}&key=${apiKey}`;
+            console.log('Fetching from:', url);
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                if (errorData.error) {
+                    throw new Error(`API Error: ${errorData.error.error}`);
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('API Response:', data);
+            return data;
+        } catch (error) {
+            console.error('Error fetching purchase logs:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Fetch events from Torn API (legacy - kept for reference)
      * @param {string} apiKey - The user's Torn API key
      * @returns {Promise<Object>} Events data from the API
      */
