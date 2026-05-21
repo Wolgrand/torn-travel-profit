@@ -1,110 +1,122 @@
 /**
- * Parser module for processing Torn events and extracting purchase information
+ * Parser module for processing Torn logs and extracting purchase information
  */
 const Parser = {
     /**
-     * Extract travel purchases from events
-     * Looks for events containing 'bought' and 'abroad'
-     * @param {Object} events - Events object from Torn API
+     * Extract travel purchases from logs
+     * @param {Object} logs - Logs object from Torn API
      * @returns {Array} Array of purchase objects
      */
-    extractPurchases(events) {
+    extractPurchases(logs) {
         const purchases = [];
 
-        if (!events || typeof events !== 'object') {
+        if (!logs || typeof logs !== 'object') {
+            console.log('No logs data available');
             return purchases;
         }
 
-        Object.values(events).forEach(event => {
-            const log = event.log || '';
-            const timestamp = event.timestamp || Date.now() / 1000;
+        Object.values(logs).forEach(log => {
+            const description = log.description || '';
+            const timestamp = log.timestamp || Date.now() / 1000;
 
-            // Check if event contains purchase keywords
-            if (this._isBoughtEvent(log) && this._isAbroadEvent(log)) {
-                const purchase = this._parsePurchaseEvent(log, timestamp);
+            // Check if this is a travel purchase event
+            if (this._isTravelPurchase(description)) {
+                const purchase = this._parsePurchaseLog(description, timestamp);
                 if (purchase) {
                     purchases.push(purchase);
                 }
             }
         });
 
+        console.log(`Extracted ${purchases.length} travel purchases from logs`);
         return purchases;
     },
 
     /**
-     * Check if event is a purchase event (contains 'bought')
-     * @param {string} log - Event log text
+     * Check if log is a travel purchase
+     * Looks for patterns like "You bought X for $Y abroad" or "You bought X in [Country]"
+     * @param {string} description - Log description text
      * @returns {boolean}
      */
-    _isBoughtEvent(log) {
-        return log.toLowerCase().includes('bought');
+    _isTravelPurchase(description) {
+        const lower = description.toLowerCase();
+        
+        // Patterns for travel purchases
+        return (lower.includes('bought') && lower.includes('abroad')) ||
+               (lower.includes('bought') && lower.includes('in') && this._hasCountry(description)) ||
+               (lower.includes('purchased') && lower.includes('abroad'));
     },
 
     /**
-     * Check if event is from abroad (contains 'abroad')
-     * @param {string} log - Event log text
+     * Check if description contains a country name
+     * @param {string} description - Log description
      * @returns {boolean}
      */
-    _isAbroadEvent(log) {
-        return log.toLowerCase().includes('abroad');
+    _hasCountry(description) {
+        const countries = [
+            'mexico', 'japan', 'canada', 'china', 'united kingdom', 
+            'switzerland', 'australia', 'argentina', 'south africa', 
+            'brazil', 'dubai', 'uk', 'us', 'usa'
+        ];
+        const lower = description.toLowerCase();
+        return countries.some(country => lower.includes(country));
     },
 
     /**
-     * Parse a purchase event to extract item name and cost
-     * Expected format: "Bought X items at price Y abroad in Country Z"
-     * @param {string} log - Event log text
-     * @param {number} timestamp - Event timestamp
+     * Parse a purchase log to extract item name and cost
+     * Handles Torn log format: "You bought X for $Y abroad" or similar
+     * @param {string} description - Log description text
+     * @param {number} timestamp - Log timestamp
      * @returns {Object|null} Purchase object or null if parsing fails
      */
-    _parsePurchaseEvent(log, timestamp) {
+    _parsePurchaseLog(description, timestamp) {
         try {
-            // Extract item name (text between "Bought" and first number or "for")
-            const itemMatch = log.match(/bought\s+(.+?)\s+(?:for|at)/i);
+            // Extract item name and quantity
+            // Patterns: "bought 10 x Item Name" or "bought Item Name"
+            let itemMatch = description.match(/bought\s+(?:(\d+)\s+x\s+)?(.+?)\s+(?:for|in|abroad)/i);
             if (!itemMatch) {
                 return null;
             }
 
-            const itemName = itemMatch[1].trim();
+            const quantity = itemMatch[1] ? parseInt(itemMatch[1]) : 1;
+            const itemName = itemMatch[2].trim();
 
-            // Extract cost (look for currency values like $1,234 or just numbers)
-            const costMatch = log.match(/[$.]\s*([0-9,]+)/);
+            // Extract cost
+            // Patterns: "for $1,234" or "for 1234"
+            const costMatch = description.match(/for\s+\$?([\d,]+)/i);
             if (!costMatch) {
                 return null;
             }
 
-            const cost = parseInt(costMatch[1].replace(/,/g, ''));
+            const totalCost = parseInt(costMatch[1].replace(/,/g, ''));
+            const costPerItem = Math.round(totalCost / quantity);
 
-            // Extract location (text after "abroad in" or similar)
-            const locationMatch = log.match(/abroad\s+in\s+(.+?)(?:\s+for|\.|$)/i);
-            const location = locationMatch ? locationMatch[1].trim() : 'Unknown';
+            if (isNaN(totalCost)) {
+                return null;
+            }
 
-            // Extract item ID if available (for market price lookup)
-            const itemId = this._extractItemId(log);
+            // Extract location
+            let location = 'Unknown';
+            const locationMatch = description.match(/(?:abroad\s+in|in)\s+([A-Za-z\s]+?)(?:\s+for|\.|\s*$)/i);
+            if (locationMatch) {
+                location = locationMatch[1].trim();
+            }
 
             return {
                 itemName,
-                cost,
+                quantity,
+                cost: costPerItem,
+                totalCost,
                 location,
                 timestamp,
                 date: new Date(timestamp * 1000),
-                itemId,
-                rawLog: log,
+                itemId: null, // Would need additional API call to get item ID
+                rawLog: description,
             };
         } catch (error) {
-            console.error('Error parsing purchase event:', error, log);
+            console.error('Error parsing purchase log:', error, description);
             return null;
         }
-    },
-
-    /**
-     * Extract item ID from event log if available
-     * @param {string} log - Event log text
-     * @returns {number|null} Item ID or null
-     */
-    _extractItemId(log) {
-        // Try to find item ID in brackets or from item name lookup
-        const idMatch = log.match(/\[(\d+)\]/);
-        return idMatch ? parseInt(idMatch[1]) : null;
     },
 
     /**
@@ -116,10 +128,13 @@ const Parser = {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        return purchases.filter(purchase => {
+        const todayPurchases = purchases.filter(purchase => {
             const purchaseDate = new Date(purchase.date);
             purchaseDate.setHours(0, 0, 0, 0);
             return purchaseDate.getTime() === today.getTime();
         });
+
+        console.log(`Found ${todayPurchases.length} purchases for today`);
+        return todayPurchases;
     },
 };
