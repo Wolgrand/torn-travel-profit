@@ -40,29 +40,29 @@ class TravelProfitApp {
         }
 
         UI.disableLoadButton();
-        UI.showLoading('Fetching events from Torn API...');
+        UI.showLoading('Fetching purchase logs from Torn API...');
 
         try {
             // Save API key to storage
             Storage.saveApiKey(apiKey);
 
-            // Fetch events from API
-            const eventData = await API.fetchEvents(apiKey);
+            // Fetch purchase logs from API (item category)
+            const logData = await API.fetchPurchaseLogs(apiKey);
 
-            if (!eventData.events) {
-                UI.showError('No events found. Make sure your API key is correct.');
+            if (!logData.log) {
+                UI.showError('No purchase logs found. Make sure your API key is correct.');
                 UI.enableLoadButton();
                 UI.hideLoading();
                 return;
             }
 
-            UI.showLoading('Parsing purchase events...');
+            UI.showLoading('Parsing purchase items...');
 
-            // Parse events to extract purchases
-            const allPurchases = Parser.extractPurchases(eventData.events);
+            // Parse logs to extract travel purchases
+            const allPurchases = Parser.extractPurchases(logData.log);
 
             if (allPurchases.length === 0) {
-                UI.showError('No travel purchases found in your events.');
+                UI.showError('No travel purchases found in your item logs.');
                 UI.enableLoadButton();
                 UI.hideLoading();
                 return;
