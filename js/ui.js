@@ -75,18 +75,23 @@ const UI = {
             const row = document.createElement('tr');
             row.className = 'border-b border-gray-200 hover:bg-gray-50 fade-in';
             
-            const profit = purchase.marketPrice - purchase.cost;
-            const profitPercent = purchase.cost > 0 ? ((profit / purchase.cost) * 100).toFixed(2) : 0;
+            // Calculate profit based on market price vs cost each
+            const marketPrice = purchase.marketPrice || purchase.costEach;
+            const profit = (marketPrice - purchase.costEach) * purchase.quantity;
+            const profitPercent = purchase.costEach > 0 ? (((marketPrice - purchase.costEach) / purchase.costEach) * 100).toFixed(2) : 0;
             const profitClass = profit >= 0 ? 'text-green-600' : 'text-red-600';
 
+            const purchaseDate = new Date(purchase.date);
+            const dateStr = purchaseDate.toLocaleTimeString();
+
             row.innerHTML = `
-                <td class="px-6 py-4 text-sm text-gray-900">${purchase.itemName || 'Unknown'}</td>
+                <td class="px-6 py-4 text-sm text-gray-900">${purchase.itemName || `Item #${purchase.itemId}`}</td>
                 <td class="px-6 py-4 text-sm text-gray-600">${purchase.location || 'Unknown'}</td>
-                <td class="px-6 py-4 text-sm text-right text-gray-900">$${purchase.cost.toLocaleString()}</td>
-                <td class="px-6 py-4 text-sm text-right text-gray-900">$${purchase.marketPrice.toLocaleString()}</td>
+                <td class="px-6 py-4 text-sm text-right text-gray-900">$${purchase.totalCost.toLocaleString()}</td>
+                <td class="px-6 py-4 text-sm text-right text-gray-900">$${purchase.costEach.toLocaleString()}</td>
                 <td class="px-6 py-4 text-sm text-right font-semibold ${profitClass}">$${profit.toLocaleString()}</td>
                 <td class="px-6 py-4 text-sm text-right ${profitClass}">${profitPercent}%</td>
-                <td class="px-6 py-4 text-sm text-gray-600">${purchase.timestamp || 'N/A'}</td>
+                <td class="px-6 py-4 text-sm text-gray-600">${dateStr}</td>
             `;
             tbody.appendChild(row);
         });
@@ -99,11 +104,15 @@ const UI = {
      * Update summary statistics
      */
     updateSummary(purchases) {
-        const totalProfit = purchases.reduce((sum, p) => sum + (p.marketPrice - p.cost), 0);
+        const totalSpent = purchases.reduce((sum, p) => sum + p.totalCost, 0);
+        const totalProfit = purchases.reduce((sum, p) => {
+            const marketPrice = p.marketPrice || p.costEach;
+            return sum + ((marketPrice - p.costEach) * p.quantity);
+        }, 0);
         const avgProfit = purchases.length > 0 ? totalProfit / purchases.length : 0;
 
         document.getElementById('totalProfit').textContent = `$${totalProfit.toLocaleString()}`;
-        document.getElementById('avgProfit').textContent = `$${avgProfit.toLocaleString()}`;
+        document.getElementById('avgProfit').textContent = `$${Math.round(avgProfit).toLocaleString()}`;
         document.getElementById('itemCount').textContent = purchases.length;
 
         document.getElementById('summarySection').classList.remove('hidden');
