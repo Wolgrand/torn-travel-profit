@@ -16,12 +16,9 @@ const Parser = {
         }
 
         Object.values(logs).forEach(log => {
-            const description = log.description || '';
-            const timestamp = log.timestamp || Date.now() / 1000;
-
-            // Check if this is a travel purchase event
-            if (this._isTravelPurchase(description)) {
-                const purchase = this._parsePurchaseLog(description, timestamp);
+            // Check if this is a travel purchase log
+            if (this._isTravelPurchaseLog(log)) {
+                const purchase = this._parseTravelLog(log);
                 if (purchase) {
                     purchases.push(purchase);
                 }
@@ -34,89 +31,117 @@ const Parser = {
 
     /**
      * Check if log is a travel purchase
-     * Looks for patterns like "You bought X for $Y abroad" or "You bought X in [Country]"
-     * @param {string} description - Log description text
+     * @param {Object} log - Log object from Torn API
      * @returns {boolean}
      */
-    _isTravelPurchase(description) {
-        const lower = description.toLowerCase();
+    _isTravelPurchaseLog(log) {
+        if (!log) return false;
         
-        // Patterns for travel purchases
-        return (lower.includes('bought') && lower.includes('abroad')) ||
-               (lower.includes('bought') && lower.includes('in') && this._hasCountry(description)) ||
-               (lower.includes('purchased') && lower.includes('abroad'));
+        // Check if category is 'Travel'
+        const isTravel = log.category === 'Travel';
+        
+        // Check if title contains "abroad buy" or similar
+        const title = log.title || '';
+        const isBuyAbroad = title.toLowerCase().includes('abroad') && title.toLowerCase().includes('buy');
+        
+        return isTravel || isBuyAbroad;
     },
 
     /**
-     * Check if description contains a country name
-     * @param {string} description - Log description
-     * @returns {boolean}
-     */
-    _hasCountry(description) {
-        const countries = [
-            'mexico', 'japan', 'canada', 'china', 'united kingdom', 
-            'switzerland', 'australia', 'argentina', 'south africa', 
-            'brazil', 'dubai', 'uk', 'us', 'usa'
-        ];
-        const lower = description.toLowerCase();
-        return countries.some(country => lower.includes(country));
-    },
-
-    /**
-     * Parse a purchase log to extract item name and cost
-     * Handles Torn log format: "You bought X for $Y abroad" or similar
-     * @param {string} description - Log description text
-     * @param {number} timestamp - Log timestamp
+     * Parse a travel purchase log
+     * Torn API format: {log, title, timestamp, category, data, params}
+     * @param {Object} log - Log object
      * @returns {Object|null} Purchase object or null if parsing fails
      */
-    _parsePurchaseLog(description, timestamp) {
+    _parseTravelLog(log) {
         try {
-            // Extract item name and quantity
-            // Patterns: "bought 10 x Item Name" or "bought Item Name"
-            let itemMatch = description.match(/bought\s+(?:(\d+)\s+x\s+)?(.+?)\s+(?:for|in|abroad)/i);
-            if (!itemMatch) {
+            // Extract data from the log object
+            const data = log.data || {};
+            const timestamp = log.timestamp || Date.now() / 1000;
+            const title = log.title || 'Item purchase abroad';
+
+            // Get item ID
+            const itemId = data.item;
+            if (!itemId) {
+                console.warn('No item ID in log:', log);
                 return null;
             }
 
-            const quantity = itemMatch[1] ? parseInt(itemMatch[1]) : 1;
-            const itemName = itemMatch[2].trim();
+            // Get quantity and costs
+            const quantity = data.quantity || 1;
+            const costEach = data.cost_each || 0;
+            const costTotal = data.cost_total || (costEach * quantity);
 
-            // Extract cost
-            // Patterns: "for $1,234" or "for 1234"
-            const costMatch = description.match(/for\s+\$?([\d,]+)/i);
-            if (!costMatch) {
+            if (costTotal === 0) {
                 return null;
             }
 
-            const totalCost = parseInt(costMatch[1].replace(/,/g, ''));
-            const costPerItem = Math.round(totalCost / quantity);
+            // Get area (location ID)
+            const areaId = data.area;
+            const location = this._getLocationName(areaId) || 'Unknown Location';
 
-            if (isNaN(totalCost)) {
-                return null;
-            }
-
-            // Extract location
-            let location = 'Unknown';
-            const locationMatch = description.match(/(?:abroad\s+in|in)\s+([A-Za-z\s]+?)(?:\s+for|\.|\s*$)/i);
-            if (locationMatch) {
-                location = locationMatch[1].trim();
-            }
+            // Get item name from title or keep as item ID
+            const itemName = this._extractItemNameFromTitle(title, itemId);
 
             return {
+                itemId,
                 itemName,
                 quantity,
-                cost: costPerItem,
-                totalCost,
+                cost: costEach,
+                totalCost: costTotal,
                 location,
+                areaId,
                 timestamp,
                 date: new Date(timestamp * 1000),
-                itemId: null, // Would need additional API call to get item ID
-                rawLog: description,
+                title,
+                rawLog: log,
             };
         } catch (error) {
-            console.error('Error parsing purchase log:', error, description);
+            console.error('Error parsing travel log:', error, log);
             return null;
         }
+    },
+
+    /**
+     * Get location name from area ID
+     * @param {number} areaId - Area ID from Torn API
+     * @returns {string} Location name
+     */
+    _getLocationName(areaId) {
+        const areas = {
+            1: 'Mexico',
+            2: 'Japan',
+            3: 'Canada',
+            4: 'China',
+            5: 'United Kingdom',
+            6: 'Switzerland',
+            7: 'Australia',
+            8: 'Argentina',
+            9: 'South Africa',
+            10: 'Brazil',
+            11: 'Croatia',
+            12: 'Dubai',
+            13: 'Hawaii',
+            14: 'Netherlands',
+            15: 'Egypt',
+        };
+        return areas[areaId] || `Area ${areaId}`;
+    },
+
+    /**
+     * Extract item name from title
+     * @param {string} title - Log title
+     * @param {number} itemId - Item ID as fallback
+     * @returns {string} Item name
+     */
+    _extractItemNameFromTitle(title, itemId) {
+        // Try to extract item name from title
+        // Pattern: "Item abroad buy" or similar
+        const match = title.match(/Item\s+abroad\s+buy/i);
+        if (match) {
+            return `Item #${itemId}`;
+        }
+        return `Item #${itemId}`;
     },
 
     /**
