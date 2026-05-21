@@ -231,22 +231,26 @@
     }
 
     async function getMarketPrices(apiKey, uniqueItemIds) {
-        const priceMap = {};
-        // Request specific items dynamically to sidestep giant JSON payloads
-        for (const itemId of uniqueItemIds) {
-            const url = `${TORN_BASE_URL}/market/${itemId}?selections=itemmarket&key=${apiKey}`;
-            try {
-                const data = await handleTornFetch(url);
-                const listings = data.itemmarket || [];
-                // The API payload comes sorted; index 0 holds the lowest price point
-                priceMap[itemId] = listings.length > 0 ? listings[0].cost : 0;
-            } catch (error) {
-                console.warn(`Failed mapping item ${itemId}, skipping.`);
-                priceMap[itemId] = 0;
-            }
+    const priceMap = {};
+    
+    for (const itemId of uniqueItemIds) {
+        // Updated to use the new v2 endpoint structure
+        const url = `https://api.torn.com/v2/market/item/${itemId}?key=${apiKey}`;
+        try {
+            const data = await handleTornFetch(url);
+            
+            // In API v2, market listings are located under data.listings
+            const listings = data.listings || [];
+            
+            // The lowest price is still the first element in the array
+            priceMap[itemId] = listings.length > 0 ? listings[0].price : 0; 
+        } catch (error) {
+            console.warn(`Failed mapping item ${itemId} using API v2, skipping.`);
+            priceMap[itemId] = 0;
         }
-        return priceMap;
     }
+    return priceMap;
+}
 
     async function getItemNamesMap(apiKey) {
         const CACHE_KEY = 'torn_items_cache';
