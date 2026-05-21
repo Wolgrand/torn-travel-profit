@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torn Travel Profit Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-6xl mx-auto">
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-4xl font-bold text-gray-900">Travel Profit Tracker</h1>
+                <p class="text-gray-600 mt-2">Track your Torn City travel purchases and profits</p>
+            </div>
+
+            <!-- API Key Input Section -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <div class="flex flex-col sm:flex-row gap-4 items-end">
+                    <div class="flex-1">
+                        <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-2">
+                            Torn API Key
+                        </label>
+                        <input
+                            type="password"
+                            id="apiKey"
+                            placeholder="Enter your Torn API key"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                        />
+                        <p class="text-xs text-gray-500 mt-1">
+                            Get your API key from <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" class="text-blue-600 hover:underline">Torn Preferences</a>
+                        </p>
+                    </div>
+                    <button
+                        id="loadBtn"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                        Load Events
+                    </button>
+                    <button
+                        id="clearBtn"
+                        class="px-6 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition"
+                    >
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="hidden bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                    <span class="text-blue-700" id="loadingText">Loading events...</span>
+                </div>
+            </div>
+
+            <!-- Error Alert -->
+            <div id="errorAlert" class="hidden bg-red-50 border border-red-200 rounded-lg p-4 mb-8">
+                <div class="flex items-start gap-3">
+                    <div class="text-red-600 font-bold">⚠</div>
+                    <div>
+                        <h3 class="font-medium text-red-900">Error</h3>
+                        <p id="errorMessage" class="text-red-700 text-sm mt-1"></p>
+                    </div>
+                    <button
+                        onclick="document.getElementById('errorAlert').classList.add('hidden')"
+                        class="ml-auto text-red-600 hover:text-red-800"
+                    >
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Success Alert -->
+            <div id="successAlert" class="hidden bg-green-50 border border-green-200 rounded-lg p-4 mb-8">
+                <div class="flex items-start gap-3">
+                    <div class="text-green-600 font-bold">✓</div>
+                    <div>
+                        <h3 class="font-medium text-green-900">Success</h3>
+                        <p id="successMessage" class="text-green-700 text-sm mt-1"></p>
+                    </div>
+                    <button
+                        onclick="document.getElementById('successAlert').classList.add('hidden')"
+                        class="ml-auto text-green-600 hover:text-green-800"
+                    >
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Section -->
+            <div id="summarySection" class="hidden mb-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <p class="text-gray-600 text-sm font-medium">Total Daily Profit</p>
+                    <p id="totalProfit" class="text-3xl font-bold text-green-600 mt-2">$0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <p class="text-gray-600 text-sm font-medium">Average Profit per Item</p>
+                    <p id="avgProfit" class="text-3xl font-bold text-blue-600 mt-2">$0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <p class="text-gray-600 text-sm font-medium">Items Tracked</p>
+                    <p id="itemCount" class="text-3xl font-bold text-purple-600 mt-2">0</p>
+                </div>
+            </div>
+
+            <!-- Data Table Section -->
+            <div id="tableSection" class="hidden bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900">Travel Purchases Today</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gray-50 border-b border-gray-200">
+                                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Item</th>
+                                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Location</th>
+                                <th class="px-6 py-3 text-right text-sm font-semibold text-gray-900">Purchase Cost</th>
+                                <th class="px-6 py-3 text-right text-sm font-semibold text-gray-900">Market Price</th>
+                                <th class="px-6 py-3 text-right text-sm font-semibold text-gray-900">Profit</th>
+                                <th class="px-6 py-3 text-right text-sm font-semibold text-gray-900">Profit %</th>
+                                <th class="px-6 py-3 text-left text-sm font-semibold text-gray-900">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="text-center py-12">
+                <p class="text-gray-600 text-lg">No data yet. Enter your API key and click "Load Events" to get started.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/parser.js"></script>
+    <script src="js/cache.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
