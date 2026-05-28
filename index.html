@@ -57,6 +57,37 @@
             padding: 10px 20px 20px 20px;
         }
 
+        .chart-canvas-wrap {
+            position: relative;
+            height: 220px;
+            max-height: 220px;
+        }
+
+        .chart-canvas-wrap canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .chart-header-label {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        #rangeControls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
         .summary-row td {
             font-weight: bold;
             background: rgba(255,255,255,0.02);
@@ -66,12 +97,17 @@
             background: transparent;
             border: 1px solid var(--border-color);
             color: var(--text-color);
-            padding: 6px 10px;
-            border-radius: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
             cursor: pointer;
             font-weight: 600;
+            font-size: 0.85rem;
+            line-height: 1;
+            min-width: 56px;
+            text-align: center;
         }
-        .range-btn.active { background: var(--accent-color); border-color: var(--accent-color); }
+        .range-btn.active { background: var(--accent-color); border-color: var(--accent-color); color: white; }
+        .chart-header .range-btn { padding: 4px 8px; min-width: 48px; }
 
         #fullFetchBtn { background:#444; border:1px solid var(--border-color); color:var(--text-color); padding:6px 10px; margin-left:6px; border-radius:6px; }
 
@@ -158,6 +194,42 @@
             border-radius: 4px;
             display: none;
         }
+
+        .debug-info {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+            display: none;
+        }
+
+        .last-updated-value {
+            font-size: 1.1rem;
+            margin-top: 8px;
+        }
+
+        .empty-cell {
+            text-align: center;
+            color: var(--text-muted);
+        }
+
+        .analytics-grid {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .analytics-grid .card {
+            flex: 1;
+        }
+
+        .analytics-table-wrap {
+            margin-top: 10px;
+        }
+
+        .analytics-table {
+            width: 100%;
+        }
+
         .error { background-color: #7f1d1d; border: 1px solid #f87171; }
         .info { background-color: #1e3a8a; border: 1px solid #60a5fa; }
     </style>
@@ -177,10 +249,9 @@
     </header>
 
     <div id="statusBox" class="status-message"></div>
-    <div id="debugInfo" style="font-size:0.85rem; color:var(--text-muted); margin-top:6px; display:none;"></div>
+    <div id="debugInfo" class="debug-info"></div>
 
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:14px;">
-        <div class="stats-grid" style="flex:1;">
+    <div class="stats-grid">
         <div class="card">
             <div class="card-title">Daily profit (today)</div>
             <div id="dailyProfit" class="card-value profit-positive">$0</div>
@@ -199,23 +270,23 @@
         </div>
         <div class="card">
             <div class="card-title">Last Updated</div>
-            <div id="lastUpdated" style="font-size: 1.1rem; margin-top: 8px;">Never</div>
+            <div id="lastUpdated" class="last-updated-value">Never</div>
         </div>
     </div>
 
-        <div style="margin-left:16px; white-space:nowrap;">
-            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">Range</div>
-            <div id="rangeControls" style="display:flex; gap:8px;">
+    <div class="card chart-card">
+        <div class="chart-header">
+            <div class="chart-header-label">Range</div>
+            <div id="rangeControls">
                 <button class="range-btn active" data-days="2">2 Days</button>
                 <button class="range-btn" data-days="7">7 Days</button>
                 <button class="range-btn" data-days="30">1 Month</button>
                 <button class="range-btn" data-days="180">6 Months</button>
             </div>
         </div>
-    </div>
-
-    <div class="card chart-card">
-        <canvas id="profitChart" height="120"></canvas>
+        <div class="chart-canvas-wrap">
+            <canvas id="profitChart"></canvas>
+        </div>
     </div>
 
     <h2>Itemized Breakdown</h2>
@@ -233,36 +304,36 @@
             </thead>
             <tbody id="logTableBody">
                 <tr>
-                    <td colspan="6" style="text-align: center; color: var(--text-muted);">No data synced yet. Enter your API Key and hit Sync.</td>
+                    <td colspan="6" class="empty-cell">No data synced yet. Enter your API Key and hit Sync.</td>
                 </tr>
             </tbody>
         </table>
     </div>
 
     <h2>Top Items & Profit by Country</h2>
-    <div style="display:flex; gap:20px; margin-top:10px;">
-        <div class="card" style="flex:1;">
+    <div class="analytics-grid">
+        <div class="card">
             <div class="card-title">Top 10 Items (by amount)</div>
-            <div style="margin-top:10px;">
-                <table style="width:100%;">
+            <div class="analytics-table-wrap">
+                <table class="analytics-table">
                     <thead>
                         <tr><th>Item</th><th>Amount</th><th>Profit</th></tr>
                     </thead>
                     <tbody id="topItemsBody">
-                        <tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No data</td></tr>
+                        <tr><td colspan="3" class="empty-cell">No data</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
-        <div class="card" style="flex:1;">
+        <div class="card">
             <div class="card-title">Amount & Profit by Country</div>
-            <div style="margin-top:10px;">
-                <table style="width:100%;">
+            <div class="analytics-table-wrap">
+                <table class="analytics-table">
                     <thead>
                         <tr><th>Country</th><th>Amount</th><th>Profit</th></tr>
                     </thead>
                     <tbody id="byCountryBody">
-                        <tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No data</td></tr>
+                        <tr><td colspan="3" class="empty-cell">No data</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -469,6 +540,15 @@
 
     function formatMoney(amount) {
         return '$' + amount.toLocaleString();
+    }
+
+    function buildDailyProfitsMap(logs) {
+        const dailyProfitsMap = {};
+        for (const log of logs || []) {
+            const key = _localDateKey(log.timestamp);
+            dailyProfitsMap[key] = (dailyProfitsMap[key] || 0) + (log.profit || 0);
+        }
+        return dailyProfitsMap;
     }
 
     let profitChartInstance = null;
@@ -738,11 +818,24 @@
     // --- Full history fetch (paged) ---
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-    async function fetchLogsPage(apiKey, offset = 0) {
-        // Try calling the same user logs endpoint with an offset parameter if supported.
-        const url = `${TORN_BASE_URL}/user/?selections=log&key=${apiKey}&offset=${offset}`;
+    async function fetchLogsPage(apiKey, cursor = {}, strategy = 'offset') {
+        const params = new URLSearchParams({
+            selections: 'log',
+            key: apiKey,
+            timestamp: String(Date.now())
+        });
+
+        if (strategy === 'offset' && typeof cursor.offset === 'number' && cursor.offset > 0) {
+            params.set('offset', String(cursor.offset));
+        } else if (strategy === 'toTimestamp' && cursor.toTimestamp) {
+            params.set('to', String(cursor.toTimestamp));
+        } else if (strategy === 'toId' && cursor.toId) {
+            params.set('to', String(cursor.toId));
+        }
+
+        const url = `${TORN_BASE_URL}/user/?${params.toString()}`;
         const data = await handleTornFetch(url);
-        return data.log ? Object.values(data.log) : [];
+        return data.log ? Object.entries(data.log).map(([logId, log]) => ({ ...log, logId })) : [];
     }
 
     async function fetchFullHistoryMode() {
@@ -750,47 +843,101 @@
         if (!apiKey) { showStatus('Please enter an API key first.', 'error'); return; }
 
         const days = getSelectedRangeDays();
-        if (!confirm(`Fetch full history from Torn until ${days} days are covered? This may make multiple API calls (rate-limited). Continue?`)) return;
+        if (!confirm('Fetch all available travel history from Torn? This may make multiple API calls and can take a while. Continue?')) return;
 
         document.getElementById('fullFetchBtn').disabled = true;
         showStatus('Fetching full history — working...', 'info');
 
         try {
-            const targetStart = Math.floor(Date.now()/1000) - (days-1)*24*3600;
             let offset = 0;
+            let strategy = 'offset';
             const pageSize = 100; // assumed page size
             const maxCalls = 90; // keep below 100/min limit
+            const maxPages = 1000;
             let calls = 0;
+            let pagesFetched = 0;
             let allLogs = [];
             let lastEarliest = null;
+            let lastEarliestLogId = null;
+            let lastPageFingerprint = null;
 
             while (true) {
+                if (pagesFetched >= maxPages) break;
+
                 if (calls >= maxCalls) {
                     showStatus('Approaching API rate limit — pausing for 60s...', 'info');
                     await sleep(61000);
                     calls = 0;
                 }
 
-                const page = await fetchLogsPage(apiKey, offset);
+                let page;
+                try {
+                    const cursor = strategy === 'offset'
+                        ? { offset }
+                        : strategy === 'toTimestamp'
+                            ? { toTimestamp: lastEarliest ? lastEarliest - 1 : null }
+                            : { toId: lastEarliestLogId };
+                    page = await fetchLogsPage(apiKey, cursor, strategy);
+                } catch (pageError) {
+                    if (strategy === 'offset') {
+                        strategy = 'toTimestamp';
+                        showStatus('Offset paging did not work. Falling back to timestamp-based history fetch...', 'info');
+                        continue;
+                    }
+                    if (strategy === 'toTimestamp' && lastEarliestLogId) {
+                        strategy = 'toId';
+                        showStatus('Timestamp paging did not work. Falling back to log-id history fetch...', 'info');
+                        continue;
+                    }
+                    throw pageError;
+                }
+
                 calls++;
+                pagesFetched++;
 
                 if (!page || page.length === 0) break;
+
+                const fingerprint = `${page[0].logId || page[0].timestamp}:${page[page.length - 1].logId || page[page.length - 1].timestamp}:${page.length}`;
+                if (fingerprint === lastPageFingerprint) {
+                    if (strategy === 'offset') {
+                        strategy = 'toTimestamp';
+                        showStatus('Offset paging returned the same page again. Switching to timestamp-based history fetch...', 'info');
+                        continue;
+                    }
+                    if (strategy === 'toTimestamp' && lastEarliestLogId) {
+                        strategy = 'toId';
+                        showStatus('Timestamp paging returned the same page again. Switching to log-id history fetch...', 'info');
+                        continue;
+                    }
+                    break;
+                }
 
                 // merge
                 allLogs = allLogs.concat(page);
 
                 // determine earliest timestamp in accumulated logs
                 const earliest = allLogs.reduce((min, l) => (min===null || l.timestamp < min) ? l.timestamp : min, null);
+                const earliestLog = allLogs.reduce((min, l) => (min===null || l.timestamp < min.timestamp) ? l : min, null);
                 if (earliest === lastEarliest) {
-                    // no progress — break to avoid infinite loop
+                    if (strategy === 'offset') {
+                        strategy = 'toTimestamp';
+                        showStatus('Offset paging stopped making progress. Switching to timestamp-based history fetch...', 'info');
+                        continue;
+                    }
+                    if (strategy === 'toTimestamp' && lastEarliestLogId) {
+                        strategy = 'toId';
+                        showStatus('Timestamp paging stopped making progress. Switching to log-id history fetch...', 'info');
+                        continue;
+                    }
                     break;
                 }
                 lastEarliest = earliest;
+                lastEarliestLogId = earliestLog && earliestLog.logId ? earliestLog.logId : lastEarliestLogId;
+                lastPageFingerprint = fingerprint;
 
-                // stop if earliest already older than target start
-                if (earliest <= targetStart) break;
-
-                offset += pageSize;
+                if (strategy === 'offset') {
+                    offset += pageSize;
+                }
                 // small delay to avoid rate-limit spikes
                 await sleep(700);
             }
@@ -800,7 +947,8 @@
                 return;
             }
 
-            // Filter and map travel purchases from fetched logs
+            // Filter, map, and dedupe travel purchases from fetched logs
+            const seenTravelLogs = new Set();
             const travelLogs = allLogs.filter(l => {
                 if (!l) return false;
                 const title = (l.title || '').toLowerCase();
@@ -812,7 +960,13 @@
                 totalCost: l.data?.cost_total || 0,
                 areaId: l.data?.area || null,
                 timestamp: l.timestamp
-            })).filter(x => x.itemId);
+            })).filter(x => {
+                if (!x.itemId) return false;
+                const dedupeKey = `${x.logId || ''}:${x.timestamp}:${x.itemId}:${x.quantity}:${x.buyPrice}:${x.areaId || ''}`;
+                if (seenTravelLogs.has(dedupeKey)) return false;
+                seenTravelLogs.add(dedupeKey);
+                return true;
+            }).sort((a, b) => b.timestamp - a.timestamp);
 
             if (travelLogs.length === 0) {
                 showStatus('Fetched logs but found no travel purchases.', 'error');
@@ -824,13 +978,21 @@
             const uniqueItemIds = [...new Set(travelLogs.map(l=>l.itemId))];
             const marketPrices = await getMarketPrices(apiKey, uniqueItemIds);
 
-            // compute analytics for the selected range
-            const analytics = calculateProfitAnalytics(travelLogs.map(l=>({ ...l })), marketPrices, days);
+            const detailedLogs = travelLogs.map(log => {
+                const currentMarketPrice = marketPrices[log.itemId] || 0;
+                const profit = (currentMarketPrice - log.buyPrice) * (log.quantity || 0);
+                return { ...log, currentMarketPrice, profit };
+            });
 
-            const uiReadyLogs = analytics.detailedLogs.map(log => ({
+            const uiReadyLogs = detailedLogs.map(log => ({
                 ...log,
                 itemName: itemNames[log.itemId] || `Item #${log.itemId}`
             }));
+
+            // compute analytics for the selected range from the full saved log set
+            const analytics = calculateProfitAnalytics(uiReadyLogs, null, days);
+            const allDailyProfitsMap = buildDailyProfitsMap(uiReadyLogs);
+            const totalProfit = uiReadyLogs.reduce((sum, log) => sum + (log.profit || 0), 0);
 
             // compute aggregates for top items and countries
             const itemAgg = {};
@@ -851,11 +1013,11 @@
             const byCountry = Object.values(countryAgg).sort((a,b)=>b.profit-a.profit);
 
             const payload = {
-                totalProfit: analytics.totalProfit,
+                totalProfit,
                 dailyProfitToday: analytics.todayProfit,
                 monthProfit: analytics.periodProfit,
                 avgDailyProfit: analytics.avgDailyProfit,
-                dailyProfitsMap: analytics.dailyProfitsMap,
+                dailyProfitsMap: allDailyProfitsMap,
                 logs: uiReadyLogs,
                 topItems,
                 byCountry,
@@ -864,7 +1026,7 @@
 
             localStorage.setItem('torn_travel_profit_data', JSON.stringify(payload));
             renderDashboard();
-            showStatus('Full history fetched and saved.', 'info');
+            showStatus(`Full history fetched and saved. ${uiReadyLogs.length} travel purchases loaded from ${pagesFetched} page(s).`, 'info');
         } catch (err) {
             showStatus('Full fetch failed: ' + (err.message || err), 'error');
         } finally {
