@@ -68,11 +68,11 @@ class TravelProfitApp {
                 return;
             }
 
-            // Get today's purchases
-            const todayPurchases = Parser.getTodayPurchases(allPurchases);
+            // Get purchases for the last 30 days
+            const recentPurchases = Parser.getPurchasesLastDays(allPurchases, 30);
 
-            if (todayPurchases.length === 0) {
-                UI.showError('No travel purchases found for today.');
+            if (recentPurchases.length === 0) {
+                UI.showError('No travel purchases found for the last 30 days.');
                 UI.enableLoadButton();
                 UI.hideLoading();
                 return;
@@ -81,7 +81,7 @@ class TravelProfitApp {
             UI.showLoading('Fetching market prices...');
 
             // Extract unique item IDs
-            const itemIds = [...new Set(todayPurchases.map(p => p.itemId).filter(Boolean))];
+            const itemIds = [...new Set(recentPurchases.map(p => p.itemId).filter(Boolean))];
 
             // Get market prices (with caching)
             let prices = {};
@@ -90,7 +90,7 @@ class TravelProfitApp {
             }
 
             // Attach market prices to purchases
-            const enrichedPurchases = todayPurchases.map(purchase => ({
+            const enrichedPurchases = recentPurchases.map(purchase => ({
                 ...purchase,
                 marketPrice: prices[purchase.itemId] ? prices[purchase.itemId].cost : purchase.cost,
             }));
@@ -102,7 +102,7 @@ class TravelProfitApp {
             // Update UI
             UI.renderTable(enrichedPurchases);
             UI.updateSummary(enrichedPurchases);
-            UI.showSuccess(`Loaded ${enrichedPurchases.length} purchase(s) for today`);
+            UI.showSuccess(`Loaded ${enrichedPurchases.length} purchase(s) for the last 30 days`);
 
             UI.enableLoadButton();
             UI.hideLoading();
