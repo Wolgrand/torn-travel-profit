@@ -145,21 +145,37 @@ const Parser = {
     },
 
     /**
-     * Get today's purchases only
+     * Get purchases within the last N days (inclusive of today)
+     * @param {Array} purchases - All purchases
+     * @param {number} days - Number of days to include (default 30)
+     * @returns {Array} Purchases within the range
+     */
+    getPurchasesLastDays(purchases, days = 30) {
+        if (!Array.isArray(purchases) || purchases.length === 0) return [];
+
+        const now = new Date();
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        start.setDate(start.getDate() - (days - 1));
+
+        const filtered = purchases.filter(purchase => {
+            const purchaseDate = new Date(purchase.date);
+            return purchaseDate >= start && purchaseDate <= end;
+        });
+
+        console.log(`Found ${filtered.length} purchases in the last ${days} day(s)`);
+        return filtered;
+    },
+
+    /**
+     * Backwards-compatible: Get today's purchases only
      * @param {Array} purchases - All purchases
      * @returns {Array} Today's purchases
      */
     getTodayPurchases(purchases) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const todayPurchases = purchases.filter(purchase => {
-            const purchaseDate = new Date(purchase.date);
-            purchaseDate.setHours(0, 0, 0, 0);
-            return purchaseDate.getTime() === today.getTime();
-        });
-
-        console.log(`Found ${todayPurchases.length} purchases for today`);
-        return todayPurchases;
+        return this.getPurchasesLastDays(purchases, 1);
     },
 };
