@@ -44,13 +44,22 @@
             gap: 10px;
         }
 
-        input[type="text"] {
+        input[type="text"], input[type="password"] {
             background-color: #111115;
             border: 1px solid var(--border-color);
             color: white;
             padding: 8px 12px;
             border-radius: 4px;
             width: 250px;
+        }
+
+        .chart-card {
+            padding: 10px 20px 20px 20px;
+        }
+
+        .summary-row td {
+            font-weight: bold;
+            background: rgba(255,255,255,0.02);
         }
 
         button {
@@ -131,6 +140,8 @@
         .error { background-color: #7f1d1d; border: 1px solid #f87171; }
         .info { background-color: #1e3a8a; border: 1px solid #60a5fa; }
     </style>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -138,7 +149,7 @@
     <header>
         <h1>✈️ Torn Travel Profits</h1>
         <div class="api-input-group">
-            <input type="text" id="apiKeyInput" placeholder="Enter Torn API Key" />
+            <input type="password" id="apiKeyInput" placeholder="Enter Torn API Key" />
             <button id="syncBtn" onclick="syncData()">Sync Data</button>
         </div>
     </header>
@@ -151,6 +162,14 @@
             <div id="dailyProfit" class="card-value profit-positive">$0</div>
         </div>
         <div class="card">
+            <div class="card-title">Month profit (this month)</div>
+            <div id="monthProfit" class="card-value profit-positive">$0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Average daily (month)</div>
+            <div id="avgDailyProfit" class="card-value profit-positive">$0</div>
+        </div>
+        <div class="card">
             <div class="card-title">Total Travel Profit</div>
             <div id="totalProfit" class="card-value profit-positive">$0</div>
         </div>
@@ -158,6 +177,10 @@
             <div class="card-title">Last Updated</div>
             <div id="lastUpdated" style="font-size: 1.1rem; margin-top: 8px;">Never</div>
         </div>
+    </div>
+
+    <div class="card chart-card">
+        <canvas id="profitChart" height="120"></canvas>
     </div>
 
     <h2>Itemized Breakdown</h2>
@@ -278,26 +301,50 @@
     }
 
     // --- ANALYTICS LOGIC MODULE ---
+    function _localDateKey(tsSeconds) {
+        const d = new Date(tsSeconds * 1000);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+    }
+
     function calculateProfitAnalytics(processedLogs, marketPrices) {
-        const nowInSeconds = Math.floor(Date.now() / 1000);
-        const twentyFourHoursAgo = nowInSeconds - (24 * 60 * 60);
-        
+        const now = new Date();
+        const nowSec = Math.floor(now.getTime() / 1000);
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const startOfMonthSec = Math.floor(startOfMonth.getTime() / 1000);
+        const daysSoFar = now.getDate(); // 1..31
+
         let totalProfit = 0;
-        let dailyProfit = 0;
-        
+        let dailyProfit24h = 0;
+        let monthProfit = 0;
+
         const detailedLogs = processedLogs.map(log => {
             const currentMarketPrice = marketPrices[log.itemId] || 0;
             const individualProfit = (currentMarketPrice - log.buyPrice) * log.quantity;
-            
+
             totalProfit += individualProfit;
-            if (log.timestamp >= twentyFourHoursAgo) {
-                dailyProfit += individualProfit;
+            if (log.timestamp >= (nowSec - 24 * 60 * 60)) {
+                dailyProfit24h += individualProfit;
             }
-            
+
+            // accumulate month totals and per-day series
             return { ...log, currentMarketPrice, profit: individualProfit };
         });
-        
-        return { detailedLogs, dailyProfit, totalProfit };
+
+        // Build per-day profits for the current calendar month
+        const dailyProfitsMap = {};
+        for (const log of detailedLogs) {
+            if (log.timestamp < startOfMonthSec || log.timestamp > nowSec) continue;
+            const key = _localDateKey(log.timestamp);
+            dailyProfitsMap[key] = (dailyProfitsMap[key] || 0) + log.profit;
+            monthProfit += log.profit;
+        }
+
+        const avgDailyProfit = daysSoFar > 0 ? (monthProfit / daysSoFar) : 0;
+
+        return { detailedLogs, dailyProfit24h, totalProfit, monthProfit, avgDailyProfit, dailyProfitsMap };
     }
 
     // --- UI ORCHESTRATION ---
@@ -316,34 +363,118 @@
         return '$' + amount.toLocaleString();
     }
 
+    let profitChartInstance = null;
+
     function renderDashboard() {
         const cachedData = localStorage.getItem('torn_travel_profit_data');
         if (!cachedData) return;
 
         const data = JSON.parse(cachedData);
-        document.getElementById('dailyProfit').innerText = formatMoney(data.dailyProfit);
-        document.getElementById('totalProfit').innerText = formatMoney(data.totalProfit);
+        document.getElementById('dailyProfit').innerText = formatMoney(data.dailyProfit24h || 0);
+        document.getElementById('totalProfit').innerText = formatMoney(data.totalProfit || 0);
+        document.getElementById('monthProfit').innerText = formatMoney(data.monthProfit || 0);
+        document.getElementById('avgDailyProfit').innerText = formatMoney(data.avgDailyProfit || 0);
         document.getElementById('lastUpdated').innerText = new Date(data.lastUpdated).toLocaleTimeString();
 
         const tbody = document.getElementById('logTableBody');
-        if (data.logs.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center;">No valid travel logs found.</td></tr>`;
-            return;
+        if (!data.logs || data.logs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No valid travel logs found.</td></tr>`;
+        } else {
+            // Group logs by local date
+            const group = {};
+            for (const log of data.logs) {
+                const key = _localDateKey(log.timestamp);
+                if (!group[key]) group[key] = [];
+                group[key].push(log);
+            }
+
+            // Sort keys descending
+            const keys = Object.keys(group).sort((a,b) => b.localeCompare(a));
+            const rows = [];
+            for (const key of keys) {
+                const dayLogs = group[key];
+                // rows for each log
+                for (const log of dayLogs) {
+                    const readableDate = new Date(log.timestamp * 1000).toLocaleString();
+                    rows.push(`
+                        <tr>
+                            <td>${readableDate}</td>
+                            <td><strong>${log.itemName}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(${log.itemId})</span></td>
+                            <td>${log.quantity}</td>
+                            <td>${formatMoney(log.buyPrice)}</td>
+                            <td>${formatMoney(log.currentMarketPrice)}</td>
+                            <td class="profit-positive">${formatMoney(log.profit)}</td>
+                        </tr>
+                    `);
+                }
+                // summary row for the day
+                const dayTotal = data.dailyProfitsMap && data.dailyProfitsMap[key] ? data.dailyProfitsMap[key] : 0;
+                rows.push(`
+                    <tr class="summary-row">
+                        <td colspan="5">Summary for ${new Date(key + 'T00:00:00').toLocaleDateString()}</td>
+                        <td>${formatMoney(dayTotal)}</td>
+                    </tr>
+                `);
+            }
+
+            tbody.innerHTML = rows.join('');
         }
 
-        tbody.innerHTML = data.logs.map(log => {
-            const readableDate = new Date(log.timestamp * 1000).toLocaleString();
-            return `
-                <tr>
-                    <td>${readableDate}</td>
-                    <td><strong>${log.itemName}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(${log.itemId})</span></td>
-                    <td>${log.quantity}</td>
-                    <td>${formatMoney(log.buyPrice)}</td>
-                    <td>${formatMoney(log.currentMarketPrice)}</td>
-                    <td class="profit-positive">${formatMoney(log.profit)}</td>
-                </tr>
-            `;
-        }).join('');
+        // Render chart: daily profits bars + avg dashed line
+        try {
+            const ctx = document.getElementById('profitChart').getContext('2d');
+
+            // Build labels from start of month to today
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const labels = [];
+            const barData = [];
+            for (let d = new Date(start); d <= now; d.setDate(d.getDate() + 1)) {
+                const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                labels.push(d.toLocaleDateString());
+                barData.push((data.dailyProfitsMap && data.dailyProfitsMap[key]) ? data.dailyProfitsMap[key] : 0);
+            }
+
+            const avgLine = new Array(labels.length).fill(data.avgDailyProfit || 0);
+
+            if (profitChartInstance) {
+                profitChartInstance.destroy();
+            }
+
+            profitChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Daily Profit',
+                            data: barData,
+                            backgroundColor: 'rgba(59,130,246,0.7)'
+                        },
+                        {
+                            type: 'line',
+                            label: 'Avg Daily (month)',
+                            data: avgLine,
+                            borderColor: 'rgba(255,215,0,0.9)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            borderDash: [6,6],
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        } catch (e) {
+            console.warn('Chart render failed', e);
+        }
     }
 
     async function syncData() {
@@ -367,7 +498,7 @@
             const marketPrices = await getMarketPrices(apiKey, uniqueItemIds);
             
             const analytics = calculateProfitAnalytics(travelLogs, marketPrices);
-            
+
             const uiReadyLogs = analytics.detailedLogs.map(log => ({
                 ...log,
                 itemName: itemNames[log.itemId] || `Item #${log.itemId}`
@@ -375,7 +506,10 @@
 
             const payload = {
                 totalProfit: analytics.totalProfit,
-                dailyProfit: analytics.dailyProfit,
+                dailyProfit24h: analytics.dailyProfit24h,
+                monthProfit: analytics.monthProfit,
+                avgDailyProfit: analytics.avgDailyProfit,
+                dailyProfitsMap: analytics.dailyProfitsMap,
                 logs: uiReadyLogs,
                 lastUpdated: new Date().toISOString()
             };
@@ -393,4 +527,3 @@
 
 </body>
 </html>
-
