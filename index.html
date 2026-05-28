@@ -1,151 +1,878 @@
-/**
- * Main application logic
- */
-class TravelProfitApp {
-    constructor() {
-        this.purchases = [];
-        this.init();
-    }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torn City Travel Profit Tracker</title>
+    <style>
+        :root {
+            --bg-color: #1e1e24;
+            --card-bg: #2a2a35;
+            --accent-color: #3b82f6;
+            --success-color: #10b981;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #3f3f46;
+        }
 
-    /**
-     * Initialize the application
-     */
-    init() {
-        this.attachEventListeners();
-        this.loadFromStorage();
-    }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
 
-    /**
-     * Attach event listeners
-     */
-    attachEventListeners() {
-        document.getElementById('loadBtn').addEventListener('click', () => this.loadEvents());
-        document.getElementById('clearBtn').addEventListener('click', () => this.clearAll());
-        document.getElementById('apiKey').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.loadEvents();
-            }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        h1 { margin: 0; font-size: 1.8rem; }
+
+        .api-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"], input[type="password"] {
+            background-color: #111115;
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            width: 250px;
+        }
+
+        .chart-card {
+            padding: 10px 20px 20px 20px;
+        }
+
+        .summary-row td {
+            font-weight: bold;
+            background: rgba(255,255,255,0.02);
+        }
+
+        .range-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 6px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .range-btn.active { background: var(--accent-color); border-color: var(--accent-color); }
+
+        #fullFetchBtn { background:#444; border:1px solid var(--border-color); color:var(--text-color); padding:6px 10px; margin-left:6px; border-radius:6px; }
+
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        button:hover { opacity: 0.9; }
+        button:disabled { background-color: var(--border-color); cursor: not-allowed; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .card-value {
+            font-size: 1.75rem;
+            font-weight: bold;
+        }
+
+        .profit-positive { color: var(--success-color); }
+
+        .table-container {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: auto;
+            max-height: 320px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        thead th {
+            position: sticky;
+            top: 0;
+            background: var(--card-bg);
+            z-index: 2;
+        }
+
+        th {
+            background-color: #23232d;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        tr:last-child td { border-bottom: none; }
+
+        .status-message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .error { background-color: #7f1d1d; border: 1px solid #f87171; }
+        .info { background-color: #1e3a8a; border: 1px solid #60a5fa; }
+    </style>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>✈️ Torn Travel Profits</h1>
+        <div class="api-input-group">
+            <input type="password" id="apiKeyInput" placeholder="Enter Torn API Key" />
+            <button id="syncBtn" onclick="syncData()">Sync Data</button>
+            <button id="fullFetchBtn" onclick="fetchFullHistoryMode()" title="Fetch older logs until range is populated">Fetch full history</button>
+        </div>
+    </header>
+
+    <div id="statusBox" class="status-message"></div>
+    <div id="debugInfo" style="font-size:0.85rem; color:var(--text-muted); margin-top:6px; display:none;"></div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:14px;">
+        <div class="stats-grid" style="flex:1;">
+        <div class="card">
+            <div class="card-title">Daily profit (today)</div>
+            <div id="dailyProfit" class="card-value profit-positive">$0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Month profit (this month)</div>
+            <div id="monthProfit" class="card-value profit-positive">$0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Average daily (month)</div>
+            <div id="avgDailyProfit" class="card-value profit-positive">$0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Total Travel Profit</div>
+            <div id="totalProfit" class="card-value profit-positive">$0</div>
+        </div>
+        <div class="card">
+            <div class="card-title">Last Updated</div>
+            <div id="lastUpdated" style="font-size: 1.1rem; margin-top: 8px;">Never</div>
+        </div>
+    </div>
+
+        <div style="margin-left:16px; white-space:nowrap;">
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">Range</div>
+            <div id="rangeControls" style="display:flex; gap:8px;">
+                <button class="range-btn active" data-days="2">2 Days</button>
+                <button class="range-btn" data-days="7">7 Days</button>
+                <button class="range-btn" data-days="30">1 Month</button>
+                <button class="range-btn" data-days="180">6 Months</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card chart-card">
+        <canvas id="profitChart" height="120"></canvas>
+    </div>
+
+    <h2>Itemized Breakdown</h2>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Item Name (ID)</th>
+                    <th>Qty</th>
+                    <th>Buy Price</th>
+                    <th>Current Market</th>
+                    <th>Net Profit</th>
+                </tr>
+            </thead>
+            <tbody id="logTableBody">
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted);">No data synced yet. Enter your API Key and hit Sync.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>Top Items & Profit by Country</h2>
+    <div style="display:flex; gap:20px; margin-top:10px;">
+        <div class="card" style="flex:1;">
+            <div class="card-title">Top 10 Items (by amount)</div>
+            <div style="margin-top:10px;">
+                <table style="width:100%;">
+                    <thead>
+                        <tr><th>Item</th><th>Amount</th><th>Profit</th></tr>
+                    </thead>
+                    <tbody id="topItemsBody">
+                        <tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No data</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card" style="flex:1;">
+            <div class="card-title">Amount & Profit by Country</div>
+            <div style="margin-top:10px;">
+                <table style="width:100%;">
+                    <thead>
+                        <tr><th>Country</th><th>Amount</th><th>Profit</th></tr>
+                    </thead>
+                    <tbody id="byCountryBody">
+                        <tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No data</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const TORN_BASE_URL = 'https://api.torn.com';
+
+    // --- INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedKey = localStorage.getItem('torn_api_key');
+        if (savedKey) {
+            document.getElementById('apiKeyInput').value = savedKey;
+            renderDashboard(); // Render cached state on load
+        }
+
+        // set default range to 2 days
+        localStorage.setItem('torn_range_days', '2');
+
+        // wire up range buttons
+        document.querySelectorAll('.range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const days = parseInt(btn.dataset.days, 10) || 2;
+                localStorage.setItem('torn_range_days', String(days));
+                renderDashboard();
+            });
         });
-    }
+        // render to reflect the selected/default range
+        renderDashboard();
+    });
 
-    /**
-     * Load events and process them
-     */
-    async loadEvents() {
-        const apiKey = UI.getApiKey();
-
-        if (!apiKey) {
-            UI.showError('Please enter your Torn API key');
-            return;
-        }
-
-        UI.disableLoadButton();
-        UI.showLoading('Fetching purchase logs from Torn API...');
-
+    // --- API CORE MODULE ---
+    async function handleTornFetch(url) {
         try {
-            // Save API key to storage
-            Storage.saveApiKey(apiKey);
-
-            // Fetch purchase logs from API (item category)
-            const logData = await API.fetchPurchaseLogs(apiKey);
-
-            if (!logData.log) {
-                UI.showError('No purchase logs found. Make sure your API key is correct.');
-                UI.enableLoadButton();
-                UI.hideLoading();
-                return;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            
+            const data = await response.json();
+            if (data.error) {
+                const { code, error: errorMsg } = data.error;
+                if ([2, 3, 4].includes(code)) throw new Error(`API Key Error: ${errorMsg}`);
+                if (code === 5) throw new Error(`Rate Limit Hit (Max 100 req/min): ${errorMsg}`);
+                throw new Error(`API Error [${code}]: ${errorMsg}`);
             }
-
-            UI.showLoading('Parsing purchase items...');
-
-            // Parse logs to extract travel purchases
-            const allPurchases = Parser.extractPurchases(logData.log);
-
-            if (allPurchases.length === 0) {
-                UI.showError('No travel purchases found in your item logs.');
-                UI.enableLoadButton();
-                UI.hideLoading();
-                return;
-            }
-
-            // Get purchases for the last 30 days
-            const recentPurchases = Parser.getPurchasesLastDays(allPurchases, 30);
-
-            if (recentPurchases.length === 0) {
-                UI.showError('No travel purchases found for the last 30 days.');
-                UI.enableLoadButton();
-                UI.hideLoading();
-                return;
-            }
-
-            UI.showLoading('Fetching market prices...');
-
-            // Extract unique item IDs
-            const itemIds = [...new Set(recentPurchases.map(p => p.itemId).filter(Boolean))];
-
-            // Get market prices (with caching)
-            let prices = {};
-            if (itemIds.length > 0) {
-                prices = await PriceCache.getPrices(itemIds);
-            }
-
-            // Attach market prices to purchases
-            const enrichedPurchases = recentPurchases.map(purchase => ({
-                ...purchase,
-                marketPrice: prices[purchase.itemId] ? prices[purchase.itemId].cost : purchase.cost,
-            }));
-
-            // Save to storage
-            this.purchases = enrichedPurchases;
-            Storage.savePurchaseHistory(this.purchases);
-
-            // Update UI
-            UI.renderTable(enrichedPurchases);
-            UI.updateSummary(enrichedPurchases);
-            UI.showSuccess(`Loaded ${enrichedPurchases.length} purchase(s) for the last 30 days`);
-
-            UI.enableLoadButton();
-            UI.hideLoading();
+            return data;
         } catch (error) {
-            UI.showError(`Error: ${error.message || 'An unexpected error occurred'}`);
-            UI.enableLoadButton();
-            UI.hideLoading();
+            console.error("Fetch Exception:", error.message);
+            throw error;
         }
     }
 
-    /**
-     * Load data from localStorage
-     */
-    loadFromStorage() {
-        const savedApiKey = Storage.getApiKey();
-        if (savedApiKey) {
-            UI.setApiKey(savedApiKey);
-        }
-
-        const savedPurchases = Storage.getPurchaseHistory();
-        if (savedPurchases && savedPurchases.length > 0) {
-            this.purchases = savedPurchases;
-            UI.renderTable(savedPurchases);
-            UI.updateSummary(savedPurchases);
-        }
+    async function getTravelLogs(apiKey) {
+        const url = `${TORN_BASE_URL}/user/?selections=log&key=${apiKey}`;
+        const data = await handleTornFetch(url);
+        const logs = data.log || {};
+        
+        return Object.values(logs)
+            .filter(log => log.category === 'Travel' && log.title === 'Item abroad buy')
+            .map(log => ({
+                itemId: log.data.item,
+                quantity: log.data.quantity,
+                buyPrice: log.data.cost_each,
+                totalCost: log.data.cost_total,
+                areaId: log.data.area || null,
+                timestamp: log.timestamp
+            }));
     }
 
-    /**
-     * Clear all data
-     */
-    clearAll() {
-        if (!confirm('Are you sure you want to clear all data? This cannot be undone.')) {
-            return;
-        }
-
-        Storage.clearAll();
-        this.purchases = [];
-        UI.clearAll();
-        UI.showSuccess('All data cleared');
+    function getLocationName(areaId) {
+        const areas = {
+            1: 'Mexico',
+            2: 'Japan',
+            3: 'Canada',
+            4: 'China',
+            5: 'United Kingdom',
+            6: 'Switzerland',
+            7: 'Australia',
+            8: 'Argentina',
+            9: 'South Africa',
+            10: 'Brazil',
+            11: 'Croatia',
+            12: 'Dubai',
+            13: 'Hawaii',
+            14: 'Netherlands',
+            15: 'Egypt'
+        };
+        return areas[areaId] || `Area ${areaId}`;
     }
+
+    async function getMarketPrices(apiKey, uniqueItemIds) {
+    const priceMap = {};
+    
+    for (const itemId of uniqueItemIds) {
+        const url = `https://api.torn.com/v2/market/${itemId}?selections=itemmarket&key=${apiKey}`;
+        try {
+            const data = await handleTornFetch(url);
+            
+            // Drill directly into the itemmarket listings array
+            const listings = data.itemmarket?.listings || [];
+            
+            // Grab the price from index 0, or default to 0 if market is empty
+            priceMap[itemId] = listings.length > 0 ? listings[0].price : 0; 
+            
+            console.log(`Successfully parsed item ${itemId}: Current Lowest Price is $${priceMap[itemId]}`);
+        } catch (error) {
+            console.warn(`Failed mapping item ${itemId}, skipping.`);
+            priceMap[itemId] = 0;
+        }
+    }
+    return priceMap;
 }
 
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    window.app = new TravelProfitApp();
-});
+    async function getItemNamesMap(apiKey) {
+        const CACHE_KEY = 'torn_items_cache';
+        const CACHE_TIME_KEY = 'torn_items_cache_time';
+        const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
+        
+        const cachedData = localStorage.getItem(CACHE_KEY);
+        const cachedTime = localStorage.getItem(CACHE_TIME_KEY);
+        
+        if (cachedData && cachedTime && (Date.now() - cachedTime < THREE_DAYS)) {
+            return JSON.parse(cachedData);
+        }
+        
+        const url = `${TORN_BASE_URL}/torn/?selections=items&key=${apiKey}`;
+        const data = await handleTornFetch(url);
+        const items = data.items || {};
+        const nameMap = {};
+        
+        Object.keys(items).forEach(id => { nameMap[id] = items[id].name; });
+        
+        localStorage.setItem(CACHE_KEY, JSON.stringify(nameMap));
+        localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+        return nameMap;
+    }
+
+    // --- ANALYTICS LOGIC MODULE ---
+    function _localDateKey(tsSeconds) {
+        const d = new Date(tsSeconds * 1000);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+    }
+
+    // Compute analytics for an arbitrary recent-days range.
+    // If marketPrices is provided, 'processedLogs' is raw logs and profits will be computed;
+    // otherwise expect logs already contain `profit` and `currentMarketPrice`.
+    function calculateProfitAnalytics(processedLogs, marketPrices = null, days = 30) {
+        const now = new Date();
+        const nowSec = Math.floor(now.getTime() / 1000);
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        start.setDate(start.getDate() - (days - 1)); // inclusive range
+        const startSec = Math.floor(start.getTime() / 1000);
+
+        let totalProfit = 0;
+        let periodProfit = 0;
+        let todayProfit = 0;
+
+        const detailedLogs = (marketPrices ? processedLogs.map(log => {
+            const currentMarketPrice = marketPrices[log.itemId] || 0;
+            const profit = (currentMarketPrice - log.buyPrice) * (log.quantity || 0);
+            totalProfit += profit;
+            return { ...log, currentMarketPrice, profit };
+        }) : processedLogs.map(log => {
+            const profit = log.profit || 0;
+            totalProfit += profit;
+            return { ...log };
+        }));
+
+        // Build per-day map and compute period/today totals
+        const dailyProfitsMap = {};
+        for (const log of detailedLogs) {
+            if (log.timestamp < startSec || log.timestamp > nowSec) continue;
+            const key = _localDateKey(log.timestamp);
+            dailyProfitsMap[key] = (dailyProfitsMap[key] || 0) + (log.profit || 0);
+            periodProfit += (log.profit || 0);
+        }
+
+        // today's profit
+        const d = new Date();
+        const todayKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        todayProfit = dailyProfitsMap[todayKey] || 0;
+
+        // average daily over the selected days (use days as denominator)
+        const avgDailyProfit = Math.round((periodProfit / days) || 0);
+
+        return { detailedLogs, todayProfit, totalProfit, periodProfit, avgDailyProfit, dailyProfitsMap };
+    }
+
+    // --- UI ORCHESTRATION ---
+    function showStatus(msg, type = 'info') {
+        const box = document.getElementById('statusBox');
+        box.className = `status-message ${type}`;
+        box.innerText = msg;
+        box.style.display = 'block';
+    }
+
+    function clearStatus() {
+        document.getElementById('statusBox').style.display = 'none';
+    }
+
+    function formatMoney(amount) {
+        return '$' + amount.toLocaleString();
+    }
+
+    let profitChartInstance = null;
+
+    function getSelectedRangeDays() {
+        const v = parseInt(localStorage.getItem('torn_range_days') || '2', 10);
+        return [2,7,30,180].includes(v) ? v : 2;
+    }
+
+    function renderDashboard() {
+        const cachedData = localStorage.getItem('torn_travel_profit_data');
+        if (!cachedData) return;
+
+        const data = JSON.parse(cachedData);
+        const days = getSelectedRangeDays();
+        // Resolve today's profit with fallbacks for older payloads
+        // Recompute aggregates for the selected range using saved logs (no network)
+        const aggregates = calculateProfitAnalytics(data.logs || [], null, days);
+
+        // Update range button active state
+        document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.days,10)===days));
+
+        document.getElementById('dailyProfit').innerText = formatMoney(aggregates.todayProfit || 0);
+        document.getElementById('totalProfit').innerText = formatMoney(aggregates.totalProfit || 0);
+        document.getElementById('monthProfit').innerText = formatMoney(aggregates.periodProfit || 0);
+        // Show average daily without decimals
+        document.getElementById('avgDailyProfit').innerText = '$' + (aggregates.avgDailyProfit || 0).toLocaleString();
+        document.getElementById('lastUpdated').innerText = new Date(data.lastUpdated).toLocaleTimeString();
+
+        // Debug diagnostics: show counts and earliest log
+        try {
+            const totalLogs = (data.logs || []).length;
+            const nowSec = Math.floor(Date.now()/1000);
+            const startSec = nowSec - (days-1)*24*3600;
+            const inRange = (data.logs || []).filter(l => l.timestamp >= startSec && l.timestamp <= nowSec).length;
+            const earliest = (data.logs || []).reduce((min, l) => min === null || l.timestamp < min ? l.timestamp : min, null);
+            const earliestText = earliest ? new Date(earliest*1000).toLocaleString() : 'N/A';
+            const dbg = document.getElementById('debugInfo');
+            dbg.style.display = 'block';
+            dbg.innerText = `Logs: ${totalLogs} | In range (${days}d): ${inRange} | Earliest: ${earliestText}`;
+            if (inRange === 0) {
+                showStatus(`No purchases found in the selected ${days}-day range. Try syncing or expanding the range.`, 'info');
+            } else {
+                clearStatus();
+            }
+        } catch (e) { /**/ }
+
+        const tbody = document.getElementById('logTableBody');
+        if (!data.logs || data.logs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No valid travel logs found.</td></tr>`;
+        } else {
+            // Group logs by local date
+            const group = {};
+            for (const log of data.logs) {
+                const key = _localDateKey(log.timestamp);
+                if (!group[key]) group[key] = [];
+                group[key].push(log);
+            }
+
+            // Sort keys descending
+            const keys = Object.keys(group).sort((a,b) => b.localeCompare(a));
+            const rows = [];
+            for (const key of keys) {
+                const dayLogs = group[key];
+                // rows for each log
+                for (const log of dayLogs) {
+                    const readableDate = new Date(log.timestamp * 1000).toLocaleString();
+                    rows.push(`
+                        <tr>
+                            <td>${readableDate}</td>
+                            <td><strong>${log.itemName}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(${log.itemId})</span></td>
+                            <td>${log.quantity}</td>
+                            <td>${formatMoney(log.buyPrice)}</td>
+                            <td>${formatMoney(log.currentMarketPrice)}</td>
+                            <td class="profit-positive">${formatMoney(log.profit)}</td>
+                        </tr>
+                    `);
+                }
+                // summary row for the day
+                const dayTotal = data.dailyProfitsMap && data.dailyProfitsMap[key] ? data.dailyProfitsMap[key] : 0;
+                rows.push(`
+                    <tr class="summary-row">
+                        <td colspan="5">Summary for ${new Date(key + 'T00:00:00').toLocaleDateString()}</td>
+                        <td>${formatMoney(dayTotal)}</td>
+                    </tr>
+                `);
+            }
+
+            tbody.innerHTML = rows.join('');
+        }
+
+        // Render top items and country tables
+        const topBody = document.getElementById('topItemsBody');
+        const countryBody = document.getElementById('byCountryBody');
+
+        let topItems = data.topItems;
+        let byCountry = data.byCountry;
+
+        // If older payloads don't include aggregates, compute them from logs
+        if ((!topItems || topItems.length === 0) && data.logs && data.logs.length > 0) {
+            const itemAgg = {};
+            const countryAgg = {};
+            data.logs.forEach(l => {
+                const id = String(l.itemId);
+                itemAgg[id] = itemAgg[id] || { itemId: id, itemName: l.itemName || `Item #${id}`, qty: 0, profit: 0 };
+                itemAgg[id].qty += (l.quantity || 0);
+                itemAgg[id].profit += (l.profit || 0);
+
+                const areaKey = l.areaId ? String(l.areaId) : 'unknown';
+                countryAgg[areaKey] = countryAgg[areaKey] || { areaId: areaKey, location: (l.areaId ? getLocationName(l.areaId) : 'Unknown'), qty: 0, profit: 0 };
+                countryAgg[areaKey].qty += (l.quantity || 0);
+                countryAgg[areaKey].profit += (l.profit || 0);
+            });
+            topItems = Object.values(itemAgg).sort((a,b) => b.qty - a.qty).slice(0,10);
+            byCountry = Object.values(countryAgg).sort((a,b) => b.profit - a.profit);
+        }
+
+        if (topItems && topItems.length > 0) {
+            topBody.innerHTML = topItems.map(it => `
+                <tr>
+                    <td><strong>${it.itemName}</strong> <span style="color:var(--text-muted); font-size:0.8rem;">(${it.itemId})</span></td>
+                    <td>${it.qty}</td>
+                    <td class="profit-positive">${formatMoney(it.profit)}</td>
+                </tr>
+            `).join('');
+        } else {
+            topBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No data</td></tr>`;
+        }
+
+        if (byCountry && byCountry.length > 0) {
+            countryBody.innerHTML = byCountry.map(c => `
+                <tr>
+                    <td>${c.location || c.areaId}</td>
+                    <td>${c.qty}</td>
+                    <td class="profit-positive">${formatMoney(c.profit)}</td>
+                </tr>
+            `).join('');
+        } else {
+            countryBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No data</td></tr>`;
+        }
+
+        // Render chart: daily profits bars + avg dashed line
+        try {
+            const ctx = document.getElementById('profitChart').getContext('2d');
+
+            // Build labels from start of month to today
+            const now = new Date();
+            const labels = [];
+            const barData = [];
+            // generate last `days` labels ending today
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            start.setDate(start.getDate() - (days - 1));
+            for (let d = new Date(start); d <= now; d.setDate(d.getDate() + 1)) {
+                const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                labels.push(d.toLocaleDateString());
+                barData.push((aggregates.dailyProfitsMap && aggregates.dailyProfitsMap[key]) ? aggregates.dailyProfitsMap[key] : 0);
+            }
+
+            const avgLine = new Array(labels.length).fill(aggregates.avgDailyProfit || 0);
+
+            if (profitChartInstance) {
+                profitChartInstance.destroy();
+            }
+
+            profitChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Daily Profit',
+                            data: barData,
+                            backgroundColor: 'rgba(59,130,246,0.7)'
+                        },
+                        {
+                            type: 'line',
+                            label: 'Avg Daily (month)',
+                            data: avgLine,
+                            borderColor: 'rgba(255,215,0,0.9)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        } catch (e) {
+            console.warn('Chart render failed', e);
+        }
+    }
+
+    async function syncData() {
+        const apiKey = document.getElementById('apiKeyInput').value.trim();
+        const syncBtn = document.getElementById('syncBtn');
+
+        if (!apiKey) {
+            showStatus("Please enter an API key first.", "error");
+            return;
+        }
+
+        localStorage.setItem('torn_api_key', apiKey);
+        syncBtn.disabled = true;
+        showStatus("Fetching travel logs & updating live market costs...", "info");
+
+        try {
+            const travelLogs = await getTravelLogs(apiKey);
+            const uniqueItemIds = [...new Set(travelLogs.map(log => log.itemId))];
+            
+            const itemNames = await getItemNamesMap(apiKey);
+            const marketPrices = await getMarketPrices(apiKey, uniqueItemIds);
+            
+            const analytics = calculateProfitAnalytics(travelLogs, marketPrices);
+
+            const uiReadyLogs = analytics.detailedLogs.map(log => ({
+                ...log,
+                itemName: itemNames[log.itemId] || `Item #${log.itemId}`
+            }));
+
+            // Build top-10 items and country aggregates
+            const itemAgg = {};
+            const countryAgg = {};
+            uiReadyLogs.forEach(l => {
+                const id = String(l.itemId);
+                itemAgg[id] = itemAgg[id] || { itemId: id, itemName: l.itemName, qty: 0, profit: 0 };
+                itemAgg[id].qty += (l.quantity || 0);
+                itemAgg[id].profit += (l.profit || 0);
+
+                const areaKey = l.areaId ? String(l.areaId) : 'unknown';
+                countryAgg[areaKey] = countryAgg[areaKey] || { areaId: areaKey, location: getLocationName(l.areaId), qty: 0, profit: 0 };
+                countryAgg[areaKey].qty += (l.quantity || 0);
+                countryAgg[areaKey].profit += (l.profit || 0);
+            });
+
+            const topItems = Object.values(itemAgg).sort((a,b) => b.qty - a.qty).slice(0,10);
+            const byCountry = Object.values(countryAgg).sort((a,b) => b.profit - a.profit);
+
+            const payload = {
+                totalProfit: analytics.totalProfit,
+                dailyProfitToday: analytics.dailyProfitToday,
+                monthProfit: analytics.monthProfit,
+                avgDailyProfit: analytics.avgDailyProfit,
+                dailyProfitsMap: analytics.dailyProfitsMap,
+                logs: uiReadyLogs,
+                topItems,
+                byCountry,
+                lastUpdated: new Date().toISOString()
+            };
+
+            localStorage.setItem('torn_travel_profit_data', JSON.stringify(payload));
+            renderDashboard();
+            clearStatus();
+        } catch (error) {
+            showStatus(error.message, "error");
+        } finally {
+            syncBtn.disabled = false;
+        }
+    }
+
+    // --- Full history fetch (paged) ---
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function fetchLogsPage(apiKey, offset = 0) {
+        // Try calling the same user logs endpoint with an offset parameter if supported.
+        const url = `${TORN_BASE_URL}/user/?selections=log&key=${apiKey}&offset=${offset}`;
+        const data = await handleTornFetch(url);
+        return data.log ? Object.values(data.log) : [];
+    }
+
+    async function fetchFullHistoryMode() {
+        const apiKey = document.getElementById('apiKeyInput').value.trim();
+        if (!apiKey) { showStatus('Please enter an API key first.', 'error'); return; }
+
+        const days = getSelectedRangeDays();
+        if (!confirm(`Fetch full history from Torn until ${days} days are covered? This may make multiple API calls (rate-limited). Continue?`)) return;
+
+        document.getElementById('fullFetchBtn').disabled = true;
+        showStatus('Fetching full history — working...', 'info');
+
+        try {
+            const targetStart = Math.floor(Date.now()/1000) - (days-1)*24*3600;
+            let offset = 0;
+            const pageSize = 100; // assumed page size
+            const maxCalls = 90; // keep below 100/min limit
+            let calls = 0;
+            let allLogs = [];
+            let lastEarliest = null;
+
+            while (true) {
+                if (calls >= maxCalls) {
+                    showStatus('Approaching API rate limit — pausing for 60s...', 'info');
+                    await sleep(61000);
+                    calls = 0;
+                }
+
+                const page = await fetchLogsPage(apiKey, offset);
+                calls++;
+
+                if (!page || page.length === 0) break;
+
+                // merge
+                allLogs = allLogs.concat(page);
+
+                // determine earliest timestamp in accumulated logs
+                const earliest = allLogs.reduce((min, l) => (min===null || l.timestamp < min) ? l.timestamp : min, null);
+                if (earliest === lastEarliest) {
+                    // no progress — break to avoid infinite loop
+                    break;
+                }
+                lastEarliest = earliest;
+
+                // stop if earliest already older than target start
+                if (earliest <= targetStart) break;
+
+                offset += pageSize;
+                // small delay to avoid rate-limit spikes
+                await sleep(700);
+            }
+
+            if (allLogs.length === 0) {
+                showStatus('No logs returned from API.', 'error');
+                return;
+            }
+
+            // Filter and map travel purchases from fetched logs
+            const travelLogs = allLogs.filter(l => {
+                if (!l) return false;
+                const title = (l.title || '').toLowerCase();
+                return (l.category === 'Travel') || (title.includes('abroad') && title.includes('buy'));
+            }).map(l => ({
+                itemId: l.data?.item || l.data?.item_id || l.data?.itemID || null,
+                quantity: l.data?.quantity || 1,
+                buyPrice: l.data?.cost_each || l.data?.cost || 0,
+                totalCost: l.data?.cost_total || 0,
+                areaId: l.data?.area || null,
+                timestamp: l.timestamp
+            })).filter(x => x.itemId);
+
+            if (travelLogs.length === 0) {
+                showStatus('Fetched logs but found no travel purchases.', 'error');
+                return;
+            }
+
+            showStatus('Resolving item names and market prices...', 'info');
+            const itemNames = await getItemNamesMap(apiKey);
+            const uniqueItemIds = [...new Set(travelLogs.map(l=>l.itemId))];
+            const marketPrices = await getMarketPrices(apiKey, uniqueItemIds);
+
+            // compute analytics for the selected range
+            const analytics = calculateProfitAnalytics(travelLogs.map(l=>({ ...l })), marketPrices, days);
+
+            const uiReadyLogs = analytics.detailedLogs.map(log => ({
+                ...log,
+                itemName: itemNames[log.itemId] || `Item #${log.itemId}`
+            }));
+
+            // compute aggregates for top items and countries
+            const itemAgg = {};
+            const countryAgg = {};
+            uiReadyLogs.forEach(l => {
+                const id = String(l.itemId);
+                itemAgg[id] = itemAgg[id] || { itemId: id, itemName: l.itemName, qty: 0, profit: 0 };
+                itemAgg[id].qty += (l.quantity || 0);
+                itemAgg[id].profit += (l.profit || 0);
+
+                const areaKey = l.areaId ? String(l.areaId) : 'unknown';
+                countryAgg[areaKey] = countryAgg[areaKey] || { areaId: areaKey, location: getLocationName(l.areaId), qty: 0, profit: 0 };
+                countryAgg[areaKey].qty += (l.quantity || 0);
+                countryAgg[areaKey].profit += (l.profit || 0);
+            });
+
+            const topItems = Object.values(itemAgg).sort((a,b)=>b.qty-a.qty).slice(0,10);
+            const byCountry = Object.values(countryAgg).sort((a,b)=>b.profit-a.profit);
+
+            const payload = {
+                totalProfit: analytics.totalProfit,
+                dailyProfitToday: analytics.todayProfit,
+                monthProfit: analytics.periodProfit,
+                avgDailyProfit: analytics.avgDailyProfit,
+                dailyProfitsMap: analytics.dailyProfitsMap,
+                logs: uiReadyLogs,
+                topItems,
+                byCountry,
+                lastUpdated: new Date().toISOString()
+            };
+
+            localStorage.setItem('torn_travel_profit_data', JSON.stringify(payload));
+            renderDashboard();
+            showStatus('Full history fetched and saved.', 'info');
+        } catch (err) {
+            showStatus('Full fetch failed: ' + (err.message || err), 'error');
+        } finally {
+            document.getElementById('fullFetchBtn').disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
+
