@@ -388,7 +388,7 @@
     }
 
     async function getTravelLogs(apiKey) {
-        const url = `${TORN_BASE_URL}/user/log?cat=87&limit=100&key=${apiKey}`;
+        const url = `${TORN_BASE_URL}/v2/user/log?cat=87&limit=100&key=${apiKey}`;
         const data = await handleTornFetch(url);
         const logs = data.log || {};
         
